@@ -4,7 +4,7 @@ use augeas_sys as raw;
 use std::ptr;
 use std::mem::transmute;
 use std::ffi::CString;
-use libc::c_char;
+use libc::{c_char, size_t, fclose, FILE};
 use std::convert::From;
 
 pub mod error;
@@ -15,6 +15,10 @@ mod util;
 use util::ptr_to_string;
 
 pub use augeas_sys::AugFlag;
+
+extern {
+        pub fn open_memstream(bufloc: *mut *mut c_char, sizeloc: *mut size_t) -> *mut FILE;
+}
 
 pub struct Augeas {
     ptr: raw::augeas_t
@@ -108,6 +112,44 @@ impl Augeas {
 
         unsafe { raw::aug_set(self.ptr, path_c.as_ptr(), value_c.as_ptr()) };
         self.make_result(())
+    }
+
+    pub fn mv(&mut self, src: &str, dest: &str) -> Result<()> {
+        let src_c = try!(CString::new(src.as_bytes()));
+        let dest_c = try!(CString::new(dest.as_bytes()));
+
+        unsafe { raw::aug_mv(self.ptr, src_c.as_ptr(), dest_c.as_ptr()) };
+        self.make_result(())
+    }
+
+    pub fn rename(&mut self, src: &str, label: &str) -> Result<()> {
+        let src_c = try!(CString::new(src.as_bytes()));
+        let label_c = try!(CString::new(label.as_bytes()));
+
+        unsafe { raw::aug_rename(self.ptr, src_c.as_ptr(), label_c.as_ptr()) };
+        self.make_result(())
+    }
+
+    pub fn insert(&mut self, path: &str, label: &str, before: bool) -> Result<()> {
+        let path_c = try!(CString::new(path.as_bytes()));
+        let label_c = try!(CString::new(label.as_bytes()));
+        let before_c = if before { 1 } else { 0 };
+
+        unsafe { raw::aug_insert(self.ptr, path_c.as_ptr(), label_c.as_ptr(), before_c) };
+        self.make_result(())
+    }
+
+    pub fn run(&mut self, cmd: &str) -> Result<String> {
+        let cmd_c = try!(CString::new(cmd.as_bytes()));
+
+        unsafe {
+            let mut buf: *mut c_char = std::mem::uninitialized();
+            let mut size = std::mem::uninitialized();
+            let f = open_memstream(&mut buf, &mut size);
+            raw::aug_srun(self.ptr, f, cmd_c.as_ptr());
+            fclose(f);
+            self.make_result(CString::from_raw(buf).to_string_lossy().into_owned())
+        }
     }
 }
 
