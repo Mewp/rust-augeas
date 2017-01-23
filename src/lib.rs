@@ -106,11 +106,29 @@ impl Augeas {
         self.make_result(())
     }
 
-    pub fn set(&mut self, path: &str, value: &str) -> Result<()> {
+    pub fn set<'a, S: Into<Option<&'a str>>>(&mut self, path: &str, value: S) -> Result<()> {
         let path_c = try!(CString::new(path.as_bytes()));
-        let value_c = try!(CString::new(value.as_bytes()));
+        let value_c = match value.into() {
+            Some(s) => CString::new(s.as_bytes())?.into_raw(),
+            None => ptr::null()
+        };
 
-        unsafe { raw::aug_set(self.ptr, path_c.as_ptr(), value_c.as_ptr()) };
+        unsafe { raw::aug_set(self.ptr, path_c.as_ptr(), value_c) };
+        self.make_result(())
+    }
+
+    pub fn setm<'a, 'b, S: Into<Option<&'a str>>, T: Into<Option<&'b str>>>(&mut self, base: &str, sub: S, value: T) -> Result<()> {
+        let base_c = CString::new(base.as_bytes())?;
+        let sub_c = match sub.into() {
+            Some(s) => CString::new(s.as_bytes())?.into_raw(),
+            None => ptr::null()
+        };
+        let value_c = match value.into() {
+             Some(s) => CString::new(s.as_bytes())?.into_raw(),
+             None => ptr::null()
+        };
+
+        unsafe { raw::aug_setm(self.ptr, base_c.as_ptr(), sub_c, value_c) };
         self.make_result(())
     }
 
